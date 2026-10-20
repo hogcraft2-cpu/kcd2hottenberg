@@ -26,14 +26,11 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 <label>Przezroczystość: <span id="opval">25%</span></label><input id="opacity" type="range" min="5" max="85" value="25">
 <label>Grubość obramowania: <span id="swval">3</span></label><input id="sw" type="range" min="1" max="10" value="3">
 <small>Linia: kliknij punkt startowy i końcowy. Prostokąt: przeciągnij myszą. Wielokąt: klikaj kolejne punkty i zakończ dwuklikiem. Esc anuluje rysowanie.</small></div>
-<div class="section" id="syncSection"><strong>Współpraca na żywo</strong>
-<p>Połącz z projektem Supabase, aby cała ekipa widziała wspólne zmiany. Każdy uczestnik musi użyć tego samego pokoju.</p>
-<label>Supabase Project URL</label><input id="sbUrl" type="text" placeholder="https://xxxx.supabase.co">
-<label>Supabase anon / publishable key</label><input id="sbKey" type="text" placeholder="sb_publishable_… lub anon key">
-<label>Pokój ekipy</label><input id="roomId" type="text" value="kuttenberg-main" maxlength="80">
-<div class="grid"><button id="connectSync">Połącz live</button><button id="disconnectSync">Rozłącz</button></div>
-<small>Konfiguracja zostaje w tej przeglądarce. Nie wklejaj klucza service_role.</small>
-<div id="syncStatus" class="mode-notice">Synchronizacja nieaktywna.</div>
+<div class="section" id="syncSection"><strong>Mapa wspólna ekipy</strong>
+<p>Wpisz nazwę mapy. Jeśli już istnieje, wczytamy jej rysunki; jeśli nie, utworzymy pustą. Każdy z tym samym linkiem i nazwą pokoju trafi do tego samego projektu.</p>
+<label>Nazwa mapy / pokój ekipy</label><input id="roomId" type="text" value="ekipy" maxlength="80" placeholder="Np. ekipy, zwiad, oblężenie">
+<button id="connectSync" class="wide">Otwórz mapę ekipy</button>
+<div id="syncStatus" class="mode-notice">Łączenie z mapą wspólną…</div>
 </div>
 <div class="section" id="projectSection"><strong>Projekt</strong><div class="grid">
 <button id="undo" class="edit-only">Cofnij</button><button id="clear" class="edit-only">Usuń wszystko</button>
@@ -98,40 +95,75 @@ async function shareFor(role){const url=location.href.split('?')[0].split('#')[0
 $('shareViewer').onclick=()=>shareFor('view');$('shareCommander').onclick=()=>shareFor('edit');
 try{const h=location.hash.match(/^#project=(.+)$/);if(h){const enc=h[1].replace(/-/g,'+').replace(/_/g,'/');shapes=JSON.parse(decodeURIComponent(escape(atob(enc)))).shapes||[];status(mode==='view'?'Wczytano projekt · tryb tylko do podglądu.':'Wczytano projekt dowódcy.');}else if(mode==='edit'){const saved=localStorage.getItem('kcd2-kuttenberg-project');if(saved)shapes=JSON.parse(saved);}else{status('Brak projektu w linku. Otwórz link przygotowany przez dowódcę.');}}catch(e){status('Nie udało się odczytać projektu z linku.');}render();
 
+const SUPABASE_URL='https://aalcxfpxkpzjpxadykfa.supabase.co';
+const SUPABASE_KEY='sb_publishable_zlsSlIxXSPjPhbM50MDnUA_E3mpbIT8';
 function syncStatus(message){$('syncStatus').textContent=message;}
-function scheduleSync(){if(syncTimer)clearTimeout(syncTimer);syncTimer=setTimeout(async()=>{if(!supabaseClient||!syncRoom||applyingRemote)return;const payload={room_id:syncRoom,shapes,updated_at:new Date().toISOString()};const {error}=await supabaseClient.from(SYNC_TABLE).upsert(payload,{onConflict:'room_id'});if(error)syncStatus('Błąd zapisu: '+error.message);},450);}
-$('connectSync').onclick=async()=>{
- if(mode==='view'){syncStatus('Ten link ma tryb tylko do podglądu. Otwórz tryb dowódcy, aby edytować.');return;}
- const url=$('sbUrl').value.trim(),key=$('sbKey').value.trim(),room=$('roomId').value.trim();
- if(!url||!key||!room){syncStatus('Wpisz Project URL, anon/publishable key i nazwę pokoju.');return;}
- if(!window.supabase){syncStatus('Nie udało się załadować biblioteki Supabase.');return;}
+function scheduleSync(){
+ if(syncTimer)clearTimeout(syncTimer);
+ syncTimer=setTimeout(async()=>{
+  if(!supabaseClient||!syncRoom||applyingRemote)return;
+  const payload={room_id:syncRoom,shapes,updated_at:new Date().toISOString()};
+  const {error}=await supabaseClient.from(SYNC_TABLE).upsert(payload,{onConflict:'room_id'});
+  if(error)syncStatus('Błąd zapisu: '+error.message);
+ },450);
+}
+async function openTeamMap(){
+ if(mode==='view'){syncStatus('Ten link ma tryb tylko do podglądu.');return;}
+ const room=$('roomId').value.trim();
+ if(!room){syncStatus('Wpisz nazwę mapy.');return;}
+ if(!window.supabase){syncStatus('Nie załadowała się biblioteka Supabase. Odśwież stronę.');return;}
+ if(syncRoom===room&&syncChannel){syncStatus('Ta mapa jest już otwarta.');return;}
  try{
-  if(syncChannel)await supabaseClient.removeChannel(syncChannel);
-  supabaseClient=window.supabase.createClient(url,key);
+  syncStatus('Wczytuję mapę „'+room+'”…');
+  if(syncChannel&&supabaseClient)await supabaseClient.removeChannel(syncChannel);
+  syncChannel=null;
+  if(syncTimer)clearTimeout(syncTimer);
+  supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   syncRoom=room;
   const {data,error}=await supabaseClient.from(SYNC_TABLE).select('shapes').eq('room_id',syncRoom).maybeSingle();
   if(error)throw error;
-  if(data&&Array.isArray(data.shapes)){shapes=data.shapes;applyingRemote=true;render();applyingRemote=false;syncStatus('Wczytano wspólny projekt. Nasłuchuję zmian…');}
-  else {const {error:saveError}=await supabaseClient.from(SYNC_TABLE).upsert({room_id:syncRoom,shapes,updated_at:new Date().toISOString()},{onConflict:'room_id'});if(saveError)throw saveError;}
-  syncChannel=supabaseClient.channel('kcd2-room-'+syncRoom).on('postgres_changes',{event:'UPDATE',schema:'public',table:SYNC_TABLE,filter:'room_id=eq.'+syncRoom},payload=>{
-   if(!payload.new||!Array.isArray(payload.new.shapes))return;
-   applyingRemote=true;shapes=payload.new.shapes;render();applyingRemote=false;syncStatus('Połączono. Oznaczenia aktualizują się na żywo.');
-  }).on('postgres_changes',{event:'INSERT',schema:'public',table:SYNC_TABLE,filter:'room_id=eq.'+syncRoom},payload=>{
-   if(!payload.new||!Array.isArray(payload.new.shapes))return;
-   applyingRemote=true;shapes=payload.new.shapes;render();applyingRemote=false;syncStatus('Połączono. Oznaczenia aktualizują się na żywo.');
-  }).subscribe(state=>{if(state==='SUBSCRIBED')syncStatus('Połączono. Oznaczenia aktualizują się na żywo.');else if(state==='CHANNEL_ERROR')syncStatus('Błąd kanału live. Sprawdź Realtime w Supabase.');});
-  localStorage.setItem('kcd2-sync-url',url);localStorage.setItem('kcd2-sync-key',key);localStorage.setItem('kcd2-sync-room',room);
- }catch(err){syncStatus('Nie udało się połączyć: '+(err.message||err));}
-};
-$('disconnectSync').onclick=async()=>{if(syncChannel&&supabaseClient)await supabaseClient.removeChannel(syncChannel);syncChannel=null;supabaseClient=null;syncRoom='';if(syncTimer)clearTimeout(syncTimer);syncStatus('Rozłączono synchronizację live.');};
-try{$('sbUrl').value=localStorage.getItem('kcd2-sync-url')||'';$('sbKey').value=localStorage.getItem('kcd2-sync-key')||'';$('roomId').value=localStorage.getItem('kcd2-sync-room')||'kuttenberg-main';}catch(e){}
-
+  if(data&&Array.isArray(data.shapes)){
+   applyingRemote=true;shapes=data.shapes;render();applyingRemote=false;
+   syncStatus('Wczytano istniejącą mapę „'+room+'”. Łączenie live…');
+  }else{
+   // New room always starts empty; never seed it with another room's local drawings.
+   shapes=[];
+   const {error:saveError}=await supabaseClient.from(SYNC_TABLE).upsert({room_id:syncRoom,shapes:[],updated_at:new Date().toISOString()},{onConflict:'room_id'});
+   if(saveError)throw saveError;
+   applyingRemote=true;render();applyingRemote=false;
+   syncStatus('Utworzono pustą mapę „'+room+'”. Łączenie live…');
+  }
+  syncChannel=supabaseClient.channel('kcd2-room-'+encodeURIComponent(syncRoom))
+   .on('postgres_changes',{event:'*',schema:'public',table:SYNC_TABLE,filter:'room_id=eq.'+syncRoom},payload=>{
+    if(!payload.new||!Array.isArray(payload.new.shapes))return;
+    applyingRemote=true;shapes=payload.new.shapes;render();applyingRemote=false;
+    syncStatus('Mapa „'+syncRoom+'” jest połączona. Zmiany synchronizują się na żywo.');
+   })
+   .subscribe(state=>{
+    if(state==='SUBSCRIBED')syncStatus('Mapa „'+syncRoom+'” jest połączona. Zmiany synchronizują się na żywo.');
+    else if(state==='CHANNEL_ERROR'||state==='TIMED_OUT')syncStatus('Live nie działa. Sprawdź w Supabase, czy Realtime jest włączone dla tabeli kcd2_maps.');
+    else if(state==='CLOSED')syncStatus('Kanał live został zamknięty.');
+   });
+  try{localStorage.setItem('kcd2-sync-room',room);}catch(e){}
+  const url=new URL(location.href);url.searchParams.set('room',room);history.replaceState(null,'',url.toString());
+ }catch(err){
+  applyingRemote=false;
+  syncStatus('Nie udało się otworzyć mapy: '+(err.message||err));
+ }
+}
+$('connectSync').onclick=openTeamMap;
+$('roomId').addEventListener('keydown',e=>{if(e.key==='Enter')openTeamMap();});
+try{
+ const requestedRoom=new URLSearchParams(location.search).get('room');
+ $('roomId').value=requestedRoom||localStorage.getItem('kcd2-sync-room')||'ekipy';
+}catch(e){$('roomId').value='ekipy';}
 function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
 $('export').onclick=()=>{if(mode==='view')return;download(new Blob([JSON.stringify({format:'KCD2 Kuttenberg Tactical Overlay',version:2,mapWidth:W,mapHeight:H,shapes},null,2)],{type:'application/json'}),'kuttenberg-oznaczenia.json');};
 $('import').onclick=()=>{if(mode==='view')return;$('jsonfile').click();};
 $('jsonfile').onchange=async e=>{if(mode==='view')return;try{const d=JSON.parse(await e.target.files[0].text());if(!Array.isArray(d.shapes))throw Error();shapes=d.shapes;render();status('Wczytano oznaczenia.');}catch{status('Nieprawidłowy plik JSON.')}e.target.value='';};
 $('exportsvg').onclick=()=>{if(mode==='view')return;const svg=drawLayer.getPane().querySelector('svg');if(!svg)return status('Brak oznaczeń SVG.');const clone=svg.cloneNode(true);clone.setAttribute('xmlns','http://www.w3.org/2000/svg');download(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}),'kuttenberg-warstwa.svg');status('Eksportowano widoczną warstwę SVG.');};
 $('clear').onclick=()=>{if(mode==='view')return;if(confirm('Usunąć wszystkie oznaczenia?')){shapes=[];drawing=null;render();status('Wyczyszczono oznaczenia.');}};
+openTeamMap();
 layer.on('tileerror',()=>status('Nie udało się pobrać części kafelków. Sprawdź połączenie lub źródło projektu.'));
 layer.on('tileload',()=>status('Mapa Kuttenbergu: kafelki są ładowane z repozytorium.'));
 })();
