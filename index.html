@@ -19,8 +19,8 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 <p>Planer mapy do rozgrywki KCD II. Punkty, opisy, trasy i obszary można zapisać w pliku lub zakodować w linku do udostępnienia.</p>
 <div class="section" id="toolsSection"><strong>Narzędzia</strong><div class="grid">
 <button data-tool="pan" class="active">Przesuwanie</button><button data-tool="marker">Punkt / notatka</button>
-<button data-tool="line">Trasa / linia</button><button data-tool="rect">Prostokąt</button><button data-tool="polygon">Obszar</button></div>
-<label>Typ punktu</label><select id="kind"><option value="📍">📍 Punkt ogólny</option><option value="🏕️">🏕️ Obóz / baza</option><option value="⚑">⚑ Cel / miejsce</option><option value="⚠️">⚠️ Zagrożenie</option><option value="🛡️">🛡️ Obrona</option><option value="👁️">👁️ Punkt obserwacyjny</option><option value="⚔️">⚔️ Wróg / kontakt</option><option value="🤝">🤝 Sojusznicy</option><option value="🏁">🏁 Punkt zbiórki</option><option value="🐎">🐎 Patrol / ruch</option><option value="💰">💰 Łup / zasób</option><option value="❓">❓ Do sprawdzenia</option></select>
+<button data-tool="line">Sama linia</button><button data-tool="arrowline">Linia ze strzałką</button><button data-tool="rect">Prostokąt</button><button data-tool="polygon">Obszar</button></div>
+<label>Typ punktu</label><select id="kind"><option value="📍">📍 Punkt ogólny</option><option value="🏕️">🏕️ Obóz / baza</option><option value="⚑">⚑ Cel / miejsce</option><option value="⚠️">⚠️ Zagrożenie</option><option value="🛡️">🛡️ Obrona</option><option value="👁️">👁️ Punkt obserwacyjny</option><option value="⚔️">⚔️ Wróg / kontakt</option><option value="🤝">🤝 Sojusznicy</option><option value="🏁">🏁 Punkt zbiórki</option><option value="🐎">🐎 Patrol / ruch</option><option value="🏹">🏹 Łucznicy</option><option value="🎯">🎯 Kusznicy</option><option value="🗡️">🗡️ Piechota</option><option value="🐴">🐴 Kawaleria</option><option value="🛡️">🛡️ Ciężka piechota</option><option value="💰">💰 Łup / zasób</option><option value="❓">❓ Do sprawdzenia</option></select>
 <label>Kolor</label><input id="color" type="color" value="#ff3b30">
 <label>Opis (opcjonalnie)</label><input id="label" type="text" placeholder="Np. strefa patrolu">
 <label>Przezroczystość: <span id="opval">25%</span></label><input id="opacity" type="range" min="5" max="85" value="25">
@@ -61,18 +61,19 @@ const $=id=>document.getElementById(id), status=s=>$('status').textContent=s;
 $('modeNotice').textContent=mode==='view'?'TRYB PODGLĄDU · Możesz przeglądać oznaczenia, wyszukiwać je i zmieniać widok. Rysowanie oraz edycja są wyłączone.':'TRYB DOWÓDCY · Możesz tworzyć i edytować oznaczenia oraz generować osobne linki dla odbiorców.';
 $('opacity').oninput=()=> $('opval').textContent=$('opacity').value+'%';
 $('sw').oninput=()=> $('swval').textContent=$('sw').value;
-document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{if(mode==='view')return;tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));map.dragging.enable();map.getContainer().style.cursor=tool==='pan'?'grab':'crosshair';status('Narzędzie: '+({pan:'przesuwanie',marker:'punkt / notatka',line:'trasa / linia',rect:'prostokąt',polygon:'obszar'}[tool]));});
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{if(mode==='view')return;tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('active',x===b));map.dragging.enable();map.getContainer().style.cursor=tool==='pan'?'grab':'crosshair';status('Narzędzie: '+({pan:'przesuwanie',marker:'punkt / notatka',line:'sama linia',arrowline:'linia ze strzałką',rect:'prostokąt',polygon:'obszar'}[tool]));});
 function style(s){return {color:s.color,weight:s.width,opacity:1,fillColor:s.color,fillOpacity:s.opacity};}
 function lat(p){return L.latLng(p.y,p.x)}
 function makeShape(s,preview=false){
  let l;
- if(s.type==='line'){
+ if(s.type==='line'||s.type==='arrowline'){
   const a=lat({x:s.x1,y:s.y1}),b=lat({x:s.x2,y:s.y2});
   l=L.polyline([a,b],{...style(s),fill:false});
   const pa=map.latLngToLayerPoint(a),pb=map.latLngToLayerPoint(b),angle=Math.atan2(pb.y-pa.y,pb.x-pa.x)*180/Math.PI;
   const mid=L.latLng((a.lat+b.lat)/2,(a.lng+b.lng)/2);
-  const arrow=L.marker(mid,{interactive:false,zIndexOffset:1000,icon:L.divIcon({className:'kcd-arrow',html:'<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#111820;border:2px solid #fff;color:'+s.color+';font-size:25px;font-weight:900;line-height:1;text-shadow:0 0 2px #000;transform:rotate('+angle+'deg);box-shadow:0 1px 5px #000">➤</div>',iconSize:[30,30],iconAnchor:[15,15]})});
   if(s.label)l.bindTooltip(s.label,{permanent:true,direction:'center',className:'map-label',opacity:.95});
+  if(s.type==='line')return l;
+  const arrow=L.marker(mid,{interactive:false,zIndexOffset:1000,icon:L.divIcon({className:'kcd-arrow',html:'<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#111820;border:2px solid #fff;color:'+s.color+';font-size:25px;font-weight:900;line-height:1;text-shadow:0 0 2px #000;transform:rotate('+angle+'deg);box-shadow:0 1px 5px #000">➤</div>',iconSize:[30,30],iconAnchor:[15,15]})});
   return L.layerGroup([l,arrow]);
  }
  if(s.type==='rect')l=L.rectangle([[Math.min(s.y1,s.y2),Math.min(s.x1,s.x2)],[Math.max(s.y1,s.y2),Math.max(s.x1,s.x2)]],style(s));
@@ -88,7 +89,7 @@ function updateItems(){
  $('items').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const s=shapes[+b.dataset.go];map.setView([s.y,s.x],Math.max(map.getZoom(),3));status('Wybrano punkt: '+(s.label||'bez nazwy'));});
  $('items').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editPoint(+b.dataset.edit));
  $('items').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteShape(+b.dataset.del));
- $('shapeItems').innerHTML=shapes.map((s,i)=>({s,i})).filter(o=>o.s.type!=='marker').map(({s,i})=>'<div class="item-row"><button data-shape-go="'+i+'">'+(s.type==='line'?'➤ Trasa / linia':s.type==='rect'?'▱ Prostokąt':'⬠ Obszar')+(s.label?' · '+esc(s.label):'')+'</button>'+(mode==='edit'?'<button data-del="'+i+'" title="Usuń rysunek">×</button>':'')+'</div>').join('');
+ $('shapeItems').innerHTML=shapes.map((s,i)=>({s,i})).filter(o=>o.s.type!=='marker').map(({s,i})=>'<div class="item-row"><button data-shape-go="'+i+'">'+(s.type==='line'?'━ Sama linia':s.type==='arrowline'?'➤ Linia ze strzałką':s.type==='rect'?'▱ Prostokąt':'⬠ Obszar')+(s.label?' · '+esc(s.label):'')+'</button>'+(mode==='edit'?'<button data-del="'+i+'" title="Usuń rysunek">×</button>':'')+'</div>').join('');
  $('shapeItems').querySelectorAll('[data-shape-go]').forEach(b=>b.onclick=()=>{const s=shapes[+b.dataset.shapeGo];const p=s.type==='polygon'?s.points[0]:{x:s.x1,y:s.y1};map.setView([p.y,p.x],Math.max(map.getZoom(),3));status('Wybrano rysunek: '+s.type);});
  $('shapeItems').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteShape(+b.dataset.del));
 }
@@ -100,10 +101,10 @@ map.on('click',e=>{if(mode==='view'||tool!=='marker')return;const title=$('label
 map.on('mousedown',e=>{
  if(mode==='view'||tool==='pan')return;L.DomEvent.preventDefault(e);
  const p=coords(e);
- if(tool==='line'||tool==='rect'){drawing={...fresh(tool),x1:p.x,y1:p.y,x2:p.x,y2:p.y};start=p;map.dragging.disable();render();}
+ if(tool==='line'||tool==='arrowline'||tool==='rect'){drawing={...fresh(tool),x1:p.x,y1:p.y,x2:p.x,y2:p.y};start=p;map.dragging.disable();render();}
  else if(tool==='polygon'){if(!drawing)drawing={...fresh('polygon'),points:[]};drawing.points.push(p);render();}
 });
-map.on('mousemove',e=>{if(!drawing||!start||!['line','rect'].includes(drawing.type))return;const p=coords(e);drawing.x2=p.x;drawing.y2=p.y;render();});
+map.on('mousemove',e=>{if(!drawing||!start||!['line','arrowline','rect'].includes(drawing.type))return;const p=coords(e);drawing.x2=p.x;drawing.y2=p.y;render();});
 map.on('mouseup',e=>{if(!drawing||!start||!['line','rect'].includes(drawing.type))return;const p=coords(e);drawing.x2=p.x;drawing.y2=p.y;if(Math.hypot(drawing.x2-drawing.x1,drawing.y2-drawing.y1)>3)shapes.push(drawing);drawing=null;start=null;map.dragging.enable();render();status('Oznaczenie zapisane w bieżącym projekcie.');});
 map.on('dblclick',e=>{if(mode==='view')return;if(drawing?.type==='polygon'){L.DomEvent.stop(e);if(drawing.points.length>=3)shapes.push(drawing);drawing=null;render();status('Zakończono wielokąt.');}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drawing){drawing=null;start=null;map.dragging.enable();render();}if(mode==='edit'&&e.key==='Delete'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){shapes.pop();render();}});
