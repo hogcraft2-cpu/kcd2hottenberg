@@ -12,7 +12,7 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.wide{width:100%;margin-top:7px}input[type=color]{width:100%;height:36px;border:1px solid #43515f;background:#29343f;border-radius:7px;padding:3px}input[type=range]{width:100%}input[type=text],select,textarea{width:100%;background:#111820;color:white;border:1px solid #43515f;border-radius:7px;padding:9px}textarea{min-height:65px;resize:vertical}input[type=text]{width:100%;background:#111820;color:white;border:1px solid #43515f;border-radius:7px;padding:9px}
 .section{border-top:1px solid #34404b;margin-top:14px;padding-top:13px}#map{height:100%;width:100%;background:#20252a}#status{color:#e5c579;font-size:12px;margin-top:10px;min-height:18px}.leaflet-container{background:#20252a}.leaflet-control-attribution{font-size:10px}
 @media(max-width:700px){#app{grid-template-columns:220px 1fr}aside{padding:10px}}
-.kcd-marker{background:transparent;border:0}.leaflet-popup-content{color:#111;min-width:120px}#items{max-height:220px;overflow:auto}.mode-notice{padding:9px;border:1px solid #43515f;border-radius:7px;background:#111820;color:#e5c579!important}.viewer-mode #toolsSection,.viewer-mode .edit-only{display:none!important}.viewer-mode #projectSection{border-top:0;margin-top:0}.viewer-mode #projectSection .grid{display:none}.viewer-mode #projectSection #jsonfile{display:none}.viewer-mode #projectSection #exportsvg{display:none}.viewer-mode #projectSection #search{margin-bottom:8px}.viewer-mode #syncSection p,.viewer-mode #syncSection label,.viewer-mode #syncSection #roomId,.viewer-mode #syncSection #connectSync{display:none!important}.viewer-mode #syncSection{padding-top:8px}.viewer-mode #syncSection strong{display:block;margin-bottom:8px}
+.kcd-marker{background:transparent;border:0}.kcd-arrow{background:transparent;border:0}.item-row{display:flex;gap:4px;align-items:stretch;margin-top:5px}.item-row button:first-child{flex:1;text-align:left;min-width:0}.item-row button{margin:0;padding:6px}.leaflet-popup-content{color:#111;min-width:120px}#items{max-height:220px;overflow:auto}.mode-notice{padding:9px;border:1px solid #43515f;border-radius:7px;background:#111820;color:#e5c579!important}.viewer-mode #toolsSection,.viewer-mode .edit-only{display:none!important}.viewer-mode #projectSection{border-top:0;margin-top:0}.viewer-mode #projectSection .grid{display:none}.viewer-mode #projectSection #jsonfile{display:none}.viewer-mode #projectSection #exportsvg{display:none}.viewer-mode #projectSection #search{margin-bottom:8px}.viewer-mode #syncSection p,.viewer-mode #syncSection label,.viewer-mode #syncSection #roomId,.viewer-mode #syncSection #connectSync{display:none!important}.viewer-mode #syncSection{padding-top:8px}.viewer-mode #syncSection strong{display:block;margin-bottom:8px}
 </style></head><body>
 <div id="app"><aside>
 <h1>KCD II · Kuttenberg</h1>
@@ -37,7 +37,7 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 <button id="export" class="edit-only">Eksport JSON</button><button id="import" class="edit-only">Import JSON</button></div>
 <input id="jsonfile" type="file" accept=".json,application/json" hidden>
 <button id="home" class="wide">Pokaż całą mapę</button><button id="shareViewer" class="wide edit-only">Link dla żołnierzy · tylko podgląd</button><button id="shareCommander" class="wide edit-only">Link dla kapitanów · edycja</button><button id="exportsvg" class="wide edit-only">Eksport oznaczeń SVG</button><p id="modeNotice" class="mode-notice"></p>
-<label><input id="showShapes" type="checkbox" checked> Pokaż rysunki</label><label><input id="showMarkers" type="checkbox" checked> Pokaż punkty</label><label>Lista punktów</label><small>Pokazywane są tu tylko punkty. Trasy, linie i obszary pozostają na mapie.</small><input id="search" type="text" placeholder="Szukaj punktu po nazwie…"><div id="items"></div>
+<label><input id="showShapes" type="checkbox" checked> Pokaż rysunki</label><label><input id="showMarkers" type="checkbox" checked> Pokaż punkty</label><label>Lista punktów</label><small>Pokazywane są tu tylko punkty. Trasy, linie i obszary pozostają na mapie.</small><input id="search" type="text" placeholder="Szukaj punktu po nazwie…"><div id="items"></div><label>Linie i obszary</label><small>Osobna lista rysunków, niezależna od punktów.</small><div id="shapeItems"></div>
 <div id="status">Ładowanie kafelków mapy…</div></div>
 <div class="section"><small>Mapa i grafiki należą do Warhorse Studios; kafelki pochodzą z projektu fanowskiego. Wymagane jest połączenie z internetem. Źródło: <a href="https://github.com/QuangDao215/kcd2_interactive_map" target="_blank" rel="noopener" style="color:#e5c579">GitHub projektu</a>.</small></div>
 </aside><div id="map"></div></div>
@@ -66,7 +66,14 @@ function style(s){return {color:s.color,weight:s.width,opacity:1,fillColor:s.col
 function lat(p){return L.latLng(p.y,p.x)}
 function makeShape(s,preview=false){
  let l;
- if(s.type==='line')l=L.polyline([lat({x:s.x1,y:s.y1}),lat({x:s.x2,y:s.y2})],{...style(s),fill:false});
+ if(s.type==='line'){
+  const a=lat({x:s.x1,y:s.y1}),b=lat({x:s.x2,y:s.y2});
+  l=L.polyline([a,b],{...style(s),fill:false});
+  const pa=map.latLngToLayerPoint(a),pb=map.latLngToLayerPoint(b),angle=Math.atan2(pb.y-pa.y,pb.x-pa.x)*180/Math.PI;
+  const arrow=L.marker(b,{interactive:false,icon:L.divIcon({className:'kcd-arrow',html:'<div style="font-size:23px;font-weight:900;color:'+s.color+';text-shadow:1px 1px 2px #000;transform:rotate('+angle+'deg);transform-origin:center">➤</div>',iconSize:[24,24],iconAnchor:[12,12]})});
+  if(s.label)l.bindTooltip(s.label,{permanent:true,direction:'center',className:'map-label',opacity:.95});
+  return L.layerGroup([l,arrow]);
+ }
  if(s.type==='rect')l=L.rectangle([[Math.min(s.y1,s.y2),Math.min(s.x1,s.x2)],[Math.max(s.y1,s.y2),Math.max(s.x1,s.x2)]],style(s));
  if(s.type==='polygon')l=L.polygon(s.points.map(lat),style(s));
  if(l&&s.label){l.bindTooltip(s.label,{permanent:true,direction:'center',className:'map-label',opacity:.95});}
@@ -74,7 +81,18 @@ function makeShape(s,preview=false){
 }
 function render(){drawLayer.clearLayers();markerLayer.clearLayers();shapes.forEach((s,i)=>{if(s.type==='marker'){const icon=L.divIcon({className:'kcd-marker',html:`<div style="font-size:22px;filter:drop-shadow(1px 1px 2px #000)">${s.kind||'📍'}</div>`,iconSize:[28,28],iconAnchor:[14,14]});const m=L.marker([s.y,s.x],{icon});if(s.label||s.note)m.bindPopup(`<b>${esc(s.label||'Punkt')}</b>${s.note?'<br>'+esc(s.note).replace(/\n/g,'<br>'):''}<br><small>${esc(s.category||'Ogólne')}</small>`);m.addTo(markerLayer);m.on('click',()=>{if(tool==='pan')status('Punkt: '+(s.label||'bez nazwy'));});}else if($('showShapes').checked)makeShape(s).addTo(drawLayer);});if(drawing&&$('showShapes').checked)makeShape(drawing,true).addTo(drawLayer);markerLayer.eachLayer(l=>{});$('showMarkers').checked?map.addLayer(markerLayer):map.removeLayer(markerLayer);updateItems();try{localStorage.setItem('kcd2-kuttenberg-project',JSON.stringify(shapes));}catch(e){} if(supabaseClient&&!applyingRemote&&mode==='edit')scheduleSync();}
 function esc(v){return String(v||'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
-function updateItems(){const q=$('search').value.toLowerCase();$('items').innerHTML=shapes.map((s,i)=>({s,i})).filter(o=>o.s.type==='marker'&&(o.s.label||'').toLowerCase().includes(q)).map(({s,i})=>`<button class="wide" data-go="${i}">${s.kind||'📍'} ${esc(s.label||'Bez nazwy')}</button>`).join('');$('items').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const s=shapes[+b.dataset.go];map.setView([s.y,s.x],Math.max(map.getZoom(),3));status('Wybrano punkt: '+(s.label||'bez nazwy'));});}
+function updateItems(){
+ const q=$('search').value.toLowerCase();
+ $('items').innerHTML=shapes.map((s,i)=>({s,i})).filter(o=>o.s.type==='marker'&&(o.s.label||'').toLowerCase().includes(q)).map(({s,i})=>'<div class="item-row"><button data-go="'+i+'">'+(s.kind||'📍')+' '+esc(s.label||'Bez nazwy')+'</button>'+(mode==='edit'?'<button data-edit="'+i+'" title="Edytuj punkt">✎</button><button data-del="'+i+'" title="Usuń punkt">×</button>':'')+'</div>').join('');
+ $('items').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const s=shapes[+b.dataset.go];map.setView([s.y,s.x],Math.max(map.getZoom(),3));status('Wybrano punkt: '+(s.label||'bez nazwy'));});
+ $('items').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editPoint(+b.dataset.edit));
+ $('items').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteShape(+b.dataset.del));
+ $('shapeItems').innerHTML=shapes.map((s,i)=>({s,i})).filter(o=>o.s.type!=='marker').map(({s,i})=>'<div class="item-row"><button data-shape-go="'+i+'">'+(s.type==='line'?'➤ Trasa / linia':s.type==='rect'?'▱ Prostokąt':'⬠ Obszar')+(s.label?' · '+esc(s.label):'')+'</button>'+(mode==='edit'?'<button data-del="'+i+'" title="Usuń rysunek">×</button>':'')+'</div>').join('');
+ $('shapeItems').querySelectorAll('[data-shape-go]').forEach(b=>b.onclick=()=>{const s=shapes[+b.dataset.shapeGo];const p=s.type==='polygon'?s.points[0]:{x:s.x1,y:s.y1};map.setView([p.y,p.x],Math.max(map.getZoom(),3));status('Wybrano rysunek: '+s.type);});
+ $('shapeItems').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteShape(+b.dataset.del));
+}
+function deleteShape(i){if(mode==='view'||!shapes[i])return;if(!confirm('Usunąć to oznaczenie?'))return;shapes.splice(i,1);render();status('Usunięto wybrane oznaczenie.');}
+function editPoint(i){if(mode==='view'||!shapes[i]||shapes[i].type!=='marker')return;const s=shapes[i],label=prompt('Nazwa punktu:',s.label||'');if(label===null)return;const kind=prompt('Symbol punktu (np. 📍 ⚔️ 🛡️ 🏁):',s.kind||'📍');if(kind===null)return;const note=prompt('Notatka:',s.note||'');if(note===null)return;s.label=label.trim();s.kind=kind.trim()||'📍';s.note=note;s.category=s.kind;render();status('Zaktualizowano punkt.');}
 function coords(e){return {x:e.latlng.lng,y:e.latlng.lat};}
 function fresh(type){return {type,color:$('color').value,opacity:+$('opacity').value/100,width:+$('sw').value,label:$('label').value.trim()};}
 map.on('click',e=>{if(mode==='view'||tool!=='marker')return;const title=$('label').value.trim()||prompt('Nazwa punktu:','Nowy punkt');if(title===null)return;const note=prompt('Notatka (opcjonalnie):','')||'';shapes.push({...fresh('marker'),x:e.latlng.lng,y:e.latlng.lat,kind:$('kind').value,note,category:$('kind').selectedOptions[0].text});render();status('Dodano punkt z notatką.');});
