@@ -70,7 +70,8 @@ function makeShape(s,preview=false){
   const a=lat({x:s.x1,y:s.y1}),b=lat({x:s.x2,y:s.y2});
   l=L.polyline([a,b],{...style(s),fill:false});
   const pa=map.latLngToLayerPoint(a),pb=map.latLngToLayerPoint(b),angle=Math.atan2(pb.y-pa.y,pb.x-pa.x)*180/Math.PI;
-  const arrow=L.marker(b,{interactive:false,icon:L.divIcon({className:'kcd-arrow',html:'<div style="font-size:23px;font-weight:900;color:'+s.color+';text-shadow:1px 1px 2px #000;transform:rotate('+angle+'deg);transform-origin:center">➤</div>',iconSize:[24,24],iconAnchor:[12,12]})});
+  const mid=L.latLng((a.lat+b.lat)/2,(a.lng+b.lng)/2);
+  const arrow=L.marker(mid,{interactive:false,zIndexOffset:1000,icon:L.divIcon({className:'kcd-arrow',html:'<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#111820;border:2px solid #fff;color:'+s.color+';font-size:25px;font-weight:900;line-height:1;text-shadow:0 0 2px #000;transform:rotate('+angle+'deg);box-shadow:0 1px 5px #000">➤</div>',iconSize:[30,30],iconAnchor:[15,15]})});
   if(s.label)l.bindTooltip(s.label,{permanent:true,direction:'center',className:'map-label',opacity:.95});
   return L.layerGroup([l,arrow]);
  }
