@@ -105,7 +105,7 @@ map.on('mousedown',e=>{
  else if(tool==='polygon'){if(!drawing)drawing={...fresh('polygon'),points:[]};drawing.points.push(p);render();}
 });
 map.on('mousemove',e=>{if(!drawing||!start||!['line','arrowline','rect'].includes(drawing.type))return;const p=coords(e);drawing.x2=p.x;drawing.y2=p.y;render();});
-map.on('mouseup',e=>{if(!drawing||!start||!['line','rect'].includes(drawing.type))return;const p=coords(e);drawing.x2=p.x;drawing.y2=p.y;if(Math.hypot(drawing.x2-drawing.x1,drawing.y2-drawing.y1)>3)shapes.push(drawing);drawing=null;start=null;map.dragging.enable();render();status('Oznaczenie zapisane w bieżącym projekcie.');});
+map.on('mouseup',e=>{if(!drawing||!start||!['line','arrowline','rect'].includes(drawing.type))return;const p=coords(e);drawing.x2=p.x;drawing.y2=p.y;if(Math.hypot(drawing.x2-drawing.x1,drawing.y2-drawing.y1)>3)shapes.push(drawing);drawing=null;start=null;map.dragging.enable();render();status('Oznaczenie zapisane w bieżącym projekcie.');});
 map.on('dblclick',e=>{if(mode==='view')return;if(drawing?.type==='polygon'){L.DomEvent.stop(e);if(drawing.points.length>=3)shapes.push(drawing);drawing=null;render();status('Zakończono wielokąt.');}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drawing){drawing=null;start=null;map.dragging.enable();render();}if(mode==='edit'&&e.key==='Delete'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){shapes.pop();render();}});
 $('undo').onclick=()=>{if(mode==='view')return;drawing=null;start=null;map.dragging.enable();shapes.pop();render();status('Cofnięto ostatnie oznaczenie.')};
