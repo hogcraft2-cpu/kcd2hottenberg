@@ -17,6 +17,7 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 <div id="app"><aside>
 <h1>KCD II · Kuttenberg</h1>
 <p>Planer mapy do rozgrywki KCD II. Punkty, opisy, trasy i obszary można zapisać w pliku lub zakodować w linku do udostępnienia.</p>
+<div class="section" id="basePointsSection"><strong>Punkty mapy bazowej</strong><label><input id="showBasePoints" type="checkbox" checked> Pokaż punkty POI</label><small id="basePointsStatus">Wczytywanie punktów mapy…</small><p><small>Punkty można kliknąć i dodać do wspólnych oznaczeń ekipy.</small></p></div>
 <div class="section" id="toolsSection"><strong>Narzędzia</strong><div class="grid">
 <button data-tool="pan" class="active">Przesuwanie</button><button data-tool="marker">Punkt / notatka</button>
 <button data-tool="line">Trasa / linia</button><button data-tool="rect">Prostokąt</button><button data-tool="polygon">Obszar</button></div>
@@ -52,6 +53,40 @@ const bounds=[[0,0],[H,W]];
 const layer=L.tileLayer(BASE,{tileSize:256,minZoom:0,maxZoom:MAX+2,maxNativeZoom:MAX,minNativeZoom:0,noWrap:true,bounds,errorTileUrl:'',attribution:'Map tiles: KCD2 Interactive Map · © Warhorse Studios'}).addTo(map);
 map.fitBounds(bounds);map.setMaxBounds([[-200,-200],[H,W+200]]);
 const pane=L.svg({padding:1});pane.addTo(map);
+const basePointLayer=L.layerGroup().addTo(map);
+let basePoints=[];
+const BASE_POINTS_URL='https://raw.githubusercontent.com/QuangDao215/kcd2_interactive_map/main/data/markers_kuttenberg.json';
+const BASE_ICONS={alchemy_bench:'⚗️',apothecary:'💊',archery_range:'🎯',armourer:'🛡️',bandit_camp:'💀',baths:'🛁',smithy:'⚒️',butchery:'🥩',camp:'🏕️',cobbler:'👢',combat_arena:'👊',dice_table:'🎲',fast_travel:'🏁',fisherman:'🐟',grave:'🪦',grocer:'🥬',gunsmith:'🔫',herbalist:'🌿',horse_trader:'🐴',interesting_site:'⭐',lodgings:'🛏️',tavern:'🍺',quest:'❗',shrine:'✝️',treasure:'💰',default:'📍'};
+function basePointIcon(p){return BASE_ICONS[p.category]||'📍';}
+async function loadBasePoints(){
+ const el=$('basePointsStatus');
+ try{
+  const response=await fetch(BASE_POINTS_URL,{cache:'no-cache'});
+  if(!response.ok)throw new Error('HTTP '+response.status);
+  const data=await response.json();
+  if(!Array.isArray(data.markers))throw new Error('Nieprawidłowy format danych');
+  basePoints=data.markers.filter(p=>Number.isFinite(+p.x)&&Number.isFinite(+p.y));
+  basePointLayer.clearLayers();
+  basePoints.forEach((p,i)=>{
+   const icon=L.divIcon({className:'kcd-marker',html:'<div style="font-size:16px;filter:drop-shadow(1px 1px 2px #000);background:#111c;padding:1px 3px;border-radius:5px">'+basePointIcon(p)+'</div>',iconSize:[24,24],iconAnchor:[12,12]});
+   const m=L.marker([+p.y,+p.x],{icon,keyboard:true,title:p.name||'Punkt mapy'});
+   m.bindPopup('<b>'+esc(p.name||'Punkt mapy')+'</b><br><small>'+esc(p.category||'POI')+'</small>'+(p.description?'<p>'+esc(p.description)+'</p>':'')+'<button type="button" data-add-base-point="'+i+'">Dodaj do rysunków ekipy</button>');
+   m.on('popupopen',ev=>{
+    const b=ev.popup.getElement()?.querySelector('[data-add-base-point]');
+    if(b)b.onclick=()=>{
+     if(mode==='view'){syncStatus('Tryb podglądu: nie można dodawać punktów.');return;}
+     const point=basePoints[i];
+     shapes.push({...fresh('marker'),x:+point.x,y:+point.y,kind:basePointIcon(point),label:point.name||'Punkt mapy',note:point.description||'',category:point.category||'Punkt bazowy',source:'kcd2_interactive_map'});
+     render();status('Dodano punkt „'+(point.name||'Punkt mapy')+'” do rysunków ekipy.');map.closePopup();
+    };
+   });
+   m.addTo(basePointLayer);
+  });
+  el.textContent='Wczytano '+basePoints.length+' punktów POI z publicznej bazy mapy KCD2.';
+ }catch(err){el.textContent='Nie udało się wczytać punktów: '+(err.message||err)+'. Punkty własne nadal działają.';}
+}
+$('showBasePoints').onchange=()=>{$('showBasePoints').checked?map.addLayer(basePointLayer):map.removeLayer(basePointLayer);};
+
 const params=new URLSearchParams(location.search);let mode=params.get('mode')==='view'?'view':'edit';document.body.classList.toggle('viewer-mode',mode==='view');
 let tool='pan',shapes=[],drawing=null,start=null,drawLayer=L.layerGroup().addTo(map),markerLayer=L.layerGroup().addTo(map);
 let supabaseClient=null,syncChannel=null,syncRoom='',applyingRemote=false,syncTimer=null;
@@ -165,6 +200,7 @@ $('jsonfile').onchange=async e=>{if(mode==='view')return;try{const d=JSON.parse(
 $('exportsvg').onclick=()=>{if(mode==='view')return;const svg=drawLayer.getPane().querySelector('svg');if(!svg)return status('Brak oznaczeń SVG.');const clone=svg.cloneNode(true);clone.setAttribute('xmlns','http://www.w3.org/2000/svg');download(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'}),'kuttenberg-warstwa.svg');status('Eksportowano widoczną warstwę SVG.');};
 $('clear').onclick=()=>{if(mode==='view')return;if(confirm('Usunąć wszystkie oznaczenia?')){shapes=[];drawing=null;render();status('Wyczyszczono oznaczenia.');}};
 openTeamMap();
+loadBasePoints();
 layer.on('tileerror',()=>status('Nie udało się pobrać części kafelków. Sprawdź połączenie lub źródło projektu.'));
 layer.on('tileload',()=>status('Mapa Kuttenbergu: kafelki są ładowane z repozytorium.'));
 })();
