@@ -72,7 +72,7 @@ function makeShape(s,preview=false){
  if(l&&s.label){l.bindTooltip(s.label,{permanent:true,direction:'center',className:'map-label',opacity:.95});}
  return l;
 }
-function render(){drawLayer.clearLayers();markerLayer.clearLayers();shapes.forEach((s,i)=>{if(s.type==='marker'){const icon=L.divIcon({className:'kcd-marker',html:`<div style="font-size:22px;filter:drop-shadow(1px 1px 2px #000)">${s.kind||'📍'}</div>`,iconSize:[28,28],iconAnchor:[14,14]});const m=L.marker([s.y,s.x],{icon});if(s.label||s.note)m.bindPopup(`<b>${esc(s.label||'Punkt')}</b>${s.note?'<br>'+esc(s.note).replace(/\n/g,'<br>'):''}<br><small>${esc(s.category||'Ogólne')}</small>`);m.addTo(markerLayer);m.on('click',()=>{if(tool==='pan')status('Punkt: '+(s.label||'bez nazwy'));});}else if($('showShapes').checked)makeShape(s).addTo(drawLayer);});if(drawing&&$('showShapes').checked)makeShape(drawing,true).addTo(drawLayer);markerLayer.eachLayer(l=>{});$('showMarkers').checked?map.addLayer(markerLayer):map.removeLayer(markerLayer);updateItems();try{localStorage.setItem('kcd2-kuttenberg-project',JSON.stringify(shapes));}catch(e){} if(supabaseClient&&!applyingRemote)scheduleSync();}
+function render(){drawLayer.clearLayers();markerLayer.clearLayers();shapes.forEach((s,i)=>{if(s.type==='marker'){const icon=L.divIcon({className:'kcd-marker',html:`<div style="font-size:22px;filter:drop-shadow(1px 1px 2px #000)">${s.kind||'📍'}</div>`,iconSize:[28,28],iconAnchor:[14,14]});const m=L.marker([s.y,s.x],{icon});if(s.label||s.note)m.bindPopup(`<b>${esc(s.label||'Punkt')}</b>${s.note?'<br>'+esc(s.note).replace(/\n/g,'<br>'):''}<br><small>${esc(s.category||'Ogólne')}</small>`);m.addTo(markerLayer);m.on('click',()=>{if(tool==='pan')status('Punkt: '+(s.label||'bez nazwy'));});}else if($('showShapes').checked)makeShape(s).addTo(drawLayer);});if(drawing&&$('showShapes').checked)makeShape(drawing,true).addTo(drawLayer);markerLayer.eachLayer(l=>{});$('showMarkers').checked?map.addLayer(markerLayer):map.removeLayer(markerLayer);updateItems();try{localStorage.setItem('kcd2-kuttenberg-project',JSON.stringify(shapes));}catch(e){} if(supabaseClient&&!applyingRemote&&mode==='edit')scheduleSync();}
 function esc(v){return String(v||'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
 function updateItems(){const q=$('search').value.toLowerCase();$('items').innerHTML=shapes.map((s,i)=>({s,i})).filter(o=>(o.s.label||'').toLowerCase().includes(q)).map(({s,i})=>`<button class="wide" data-go="${i}">${s.type==='marker'?(s.kind||'📍'):'▰'} ${esc(s.label||'Bez nazwy')} · ${s.type}</button>`).join('');$('items').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const s=shapes[+b.dataset.go];map.setView(s.type==='marker'?[s.y,s.x]:s.type==='polygon'?[s.points[0].y,s.points[0].x]:[s.y1,s.x1],Math.max(map.getZoom(),3));status('Wybrano: '+(s.label||'bez nazwy'));});}
 function coords(e){return {x:e.latlng.lng,y:e.latlng.lat};}
@@ -93,7 +93,7 @@ $('clear').onclick=()=>{if(mode==='view')return;if(confirm('Usunąć wszystkie o
 $('home').onclick=()=>map.fitBounds(bounds);
 $('showShapes').onchange=render;$('showMarkers').onchange=render;$('search').oninput=updateItems;
 function encodedProject(){const data=JSON.stringify({format:'KCD2 Kuttenberg Overlay',version:3,shapes});return btoa(unescape(encodeURIComponent(data))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
-async function shareFor(role){const url=location.href.split('?')[0].split('#')[0]+'?mode='+role+'#project='+encodedProject();try{await navigator.clipboard.writeText(url);status(role==='view'?'Skopiowano link dla odbiorców: tylko podgląd.':'Skopiowano link dowódcy: tryb edycji.');}catch(e){prompt(role==='view'?'Skopiuj link tylko do podglądu:':'Skopiuj link do edycji:',url);}}
+async function shareFor(role){const room=syncRoom||$('roomId').value.trim()||'ekipy';const url=location.href.split('?')[0].split('#')[0]+'?mode='+role+'&room='+encodeURIComponent(room);try{await navigator.clipboard.writeText(url);status(role==='view'?'Skopiowano link do wspólnej mapy dla żołnierzy: tylko podgląd.':'Skopiowano link dowódcy: tryb edycji.');}catch(e){prompt(role==='view'?'Skopiuj link do wspólnej mapy · tylko podgląd:':'Skopiuj link do edycji:',url);}}
 $('shareViewer').onclick=()=>shareFor('view');$('shareCommander').onclick=()=>shareFor('edit');
 try{const h=location.hash.match(/^#project=(.+)$/);if(h){const enc=h[1].replace(/-/g,'+').replace(/_/g,'/');shapes=JSON.parse(decodeURIComponent(escape(atob(enc)))).shapes||[];status(mode==='view'?'Wczytano projekt · tryb tylko do podglądu.':'Wczytano projekt dowódcy.');}else if(mode==='edit'){const saved=localStorage.getItem('kcd2-kuttenberg-project');if(saved)shapes=JSON.parse(saved);}else{status('Brak projektu w linku. Otwórz link przygotowany przez dowódcę.');}}catch(e){status('Nie udało się odczytać projektu z linku.');}render();
 
@@ -110,7 +110,6 @@ function scheduleSync(){
  },450);
 }
 async function openTeamMap(){
- if(mode==='view'){syncStatus('Ten link ma tryb tylko do podglądu.');return;}
  const room=$('roomId').value.trim();
  if(!room){syncStatus('Wpisz nazwę mapy.');return;}
  if(!window.supabase){syncStatus('Nie załadowała się biblioteka Supabase. Odśwież stronę.');return;}
@@ -128,6 +127,7 @@ async function openTeamMap(){
    applyingRemote=true;shapes=data.shapes;render();applyingRemote=false;
    syncStatus('Wczytano istniejącą mapę „'+room+'”. Łączenie live…');
   }else{
+   if(mode==='view')throw new Error('Nie znaleziono wspólnej mapy „'+room+'”. Poproś dowódcę o otwarcie i zapisanie mapy, a potem wygenerowanie nowego linku.');
    // New room always starts empty; never seed it with another room's local drawings.
    shapes=[];
    const {error:saveError}=await supabaseClient.from(SYNC_TABLE).upsert({room_id:syncRoom,shapes:[],updated_at:new Date().toISOString()},{onConflict:'room_id'});
@@ -154,6 +154,7 @@ async function openTeamMap(){
  }
 }
 $('connectSync').onclick=openTeamMap;
+if(mode==='view'){$('connectSync').textContent='Odśwież podgląd mapy';$('roomId').disabled=true;$('connectSync').classList.remove('edit-only');}
 $('roomId').addEventListener('keydown',e=>{if(e.key==='Enter')openTeamMap();});
 try{
  const requestedRoom=new URLSearchParams(location.search).get('room');
