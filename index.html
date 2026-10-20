@@ -12,7 +12,7 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.wide{width:100%;margin-top:7px}input[type=color]{width:100%;height:36px;border:1px solid #43515f;background:#29343f;border-radius:7px;padding:3px}input[type=range]{width:100%}input[type=text],select,textarea{width:100%;background:#111820;color:white;border:1px solid #43515f;border-radius:7px;padding:9px}textarea{min-height:65px;resize:vertical}input[type=text]{width:100%;background:#111820;color:white;border:1px solid #43515f;border-radius:7px;padding:9px}
 .section{border-top:1px solid #34404b;margin-top:14px;padding-top:13px}#map{height:100%;width:100%;background:#20252a}#status{color:#e5c579;font-size:12px;margin-top:10px;min-height:18px}.leaflet-container{background:#20252a}.leaflet-control-attribution{font-size:10px}
 @media(max-width:700px){#app{grid-template-columns:220px 1fr}aside{padding:10px}}
-.kcd-marker{background:transparent;border:0}.leaflet-popup-content{color:#111;min-width:120px}#items{max-height:220px;overflow:auto}.mode-notice{padding:9px;border:1px solid #43515f;border-radius:7px;background:#111820;color:#e5c579!important}.viewer-mode #toolsSection,.viewer-mode .edit-only{display:none!important}.viewer-mode #projectSection{border-top:0;margin-top:0}.viewer-mode #projectSection .grid{display:none}.viewer-mode #projectSection #jsonfile{display:none}.viewer-mode #projectSection #exportsvg{display:none}.viewer-mode #projectSection #search{margin-bottom:8px}
+.kcd-marker{background:transparent;border:0}.leaflet-popup-content{color:#111;min-width:120px}#items{max-height:220px;overflow:auto}.mode-notice{padding:9px;border:1px solid #43515f;border-radius:7px;background:#111820;color:#e5c579!important}.viewer-mode #toolsSection,.viewer-mode .edit-only{display:none!important}.viewer-mode #projectSection{border-top:0;margin-top:0}.viewer-mode #projectSection .grid{display:none}.viewer-mode #projectSection #jsonfile{display:none}.viewer-mode #projectSection #exportsvg{display:none}.viewer-mode #projectSection #search{margin-bottom:8px}.viewer-mode #syncSection p,.viewer-mode #syncSection label,.viewer-mode #syncSection #roomId,.viewer-mode #syncSection #connectSync{display:none!important}.viewer-mode #syncSection{padding-top:8px}.viewer-mode #syncSection strong{display:block;margin-bottom:8px}
 </style></head><body>
 <div id="app"><aside>
 <h1>KCD II · Kuttenberg</h1>
@@ -27,7 +27,7 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 <label>Grubość obramowania: <span id="swval">3</span></label><input id="sw" type="range" min="1" max="10" value="3">
 <small>Linia: kliknij punkt startowy i końcowy. Prostokąt: przeciągnij myszą. Wielokąt: klikaj kolejne punkty i zakończ dwuklikiem. Esc anuluje rysowanie.</small></div>
 <div class="section" id="syncSection"><strong>Mapa wspólna ekipy</strong>
-<p>Wpisz nazwę mapy. Jeśli już istnieje, wczytamy jej rysunki; jeśli nie, utworzymy pustą. Każdy z tym samym linkiem i nazwą pokoju trafi do tego samego projektu.</p>
+<p class="edit-only">Wpisz nazwę mapy. Jeśli już istnieje, wczytamy jej rysunki; jeśli nie, utworzymy pustą. Każdy z tym samym linkiem i nazwą pokoju trafi do tego samego projektu.</p>
 <label>Nazwa mapy / pokój ekipy</label><input id="roomId" type="text" value="ekipy" maxlength="80" placeholder="Np. ekipy, zwiad, oblężenie">
 <button id="connectSync" class="wide">Otwórz mapę ekipy</button>
 <div id="syncStatus" class="mode-notice">Łączenie z mapą wspólną…</div>
@@ -111,7 +111,7 @@ function scheduleSync(){
 }
 async function openTeamMap(){
  const room=$('roomId').value.trim();
- if(!room){syncStatus('Wpisz nazwę mapy.');return;}
+ if(!room){syncStatus(mode==='view'?'Ten link podglądu nie zawiera przypisanego pokoju. Poproś kapitana o nowy link.':'Wpisz nazwę mapy.');return;}
  if(!window.supabase){syncStatus('Nie załadowała się biblioteka Supabase. Odśwież stronę.');return;}
  if(syncRoom===room&&syncChannel){syncStatus('Ta mapa jest już otwarta.');return;}
  try{
@@ -158,7 +158,8 @@ if(mode==='view'){$('connectSync').textContent='Odśwież podgląd mapy';$('room
 $('roomId').addEventListener('keydown',e=>{if(e.key==='Enter')openTeamMap();});
 try{
  const requestedRoom=new URLSearchParams(location.search).get('room');
- $('roomId').value=requestedRoom||localStorage.getItem('kcd2-sync-room')||'ekipy';
+ $('roomId').value=mode==='view'?(requestedRoom||''):(requestedRoom||localStorage.getItem('kcd2-sync-room')||'ekipy');
+ if(mode==='view')$('syncSection').querySelector('strong').textContent=requestedRoom?'Podgląd pokoju: '+requestedRoom:'Podgląd bez przypisanego pokoju';
 }catch(e){$('roomId').value='ekipy';}
 function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
 $('export').onclick=()=>{if(mode==='view')return;download(new Blob([JSON.stringify({format:'KCD2 Kuttenberg Tactical Overlay',version:2,mapWidth:W,mapHeight:H,shapes},null,2)],{type:'application/json'}),'kuttenberg-oznaczenia.json');};
