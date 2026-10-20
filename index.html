@@ -56,7 +56,8 @@ const layer=L.tileLayer(BASE,{tileSize:256,minZoom:0,maxZoom:MAX+2,maxNativeZoom
 map.fitBounds(bounds);map.setMaxBounds([[-200,-200],[H,W+200]]);
 const pane=L.svg({padding:1});pane.addTo(map);
 const params=new URLSearchParams(location.search);let mode=params.get('mode')==='view'?'view':'edit';document.body.classList.toggle('viewer-mode',mode==='view');
-let tool='pan',shapes=[],drawing=null,start=null,drawLayer=L.layerGroup().addTo(map),markerLayer=L.layerGroup().addTo(map);\nlet supabaseClient=null,syncChannel=null,syncRoom='',applyingRemote=false,syncTimer=null;\nconst SYNC_TABLE='kcd2_maps';
+let tool='pan',shapes=[],drawing=null,start=null,drawLayer=L.layerGroup().addTo(map),markerLayer=L.layerGroup().addTo(map);
+let supabaseClient=null,syncChannel=null,syncRoom='',applyingRemote=false,syncTimer=null;\nconst SYNC_TABLE='kcd2_maps';
 const $=id=>document.getElementById(id), status=s=>$('status').textContent=s;
 $('modeNotice').textContent=mode==='view'?'TRYB PODGLĄDU · Możesz przeglądać oznaczenia, wyszukiwać je i zmieniać widok. Rysowanie oraz edycja są wyłączone.':'TRYB DOWÓDCY · Możesz tworzyć i edytować oznaczenia oraz generować osobne linki dla odbiorców.';
 $('opacity').oninput=()=> $('opval').textContent=$('opacity').value+'%';
@@ -124,7 +125,8 @@ $('connectSync').onclick=async()=>{
 };
 $('disconnectSync').onclick=async()=>{if(syncChannel&&supabaseClient)await supabaseClient.removeChannel(syncChannel);syncChannel=null;supabaseClient=null;syncRoom='';if(syncTimer)clearTimeout(syncTimer);syncStatus('Rozłączono synchronizację live.');};
 try{$('sbUrl').value=localStorage.getItem('kcd2-sync-url')||'';$('sbKey').value=localStorage.getItem('kcd2-sync-key')||'';$('roomId').value=localStorage.getItem('kcd2-sync-room')||'kuttenberg-main';}catch(e){}
-\nfunction download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
+
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
 $('export').onclick=()=>{if(mode==='view')return;download(new Blob([JSON.stringify({format:'KCD2 Kuttenberg Tactical Overlay',version:2,mapWidth:W,mapHeight:H,shapes},null,2)],{type:'application/json'}),'kuttenberg-oznaczenia.json');};
 $('import').onclick=()=>{if(mode==='view')return;$('jsonfile').click();};
 $('jsonfile').onchange=async e=>{if(mode==='view')return;try{const d=JSON.parse(await e.target.files[0].text());if(!Array.isArray(d.shapes))throw Error();shapes=d.shapes;render();status('Wczytano oznaczenia.');}catch{status('Nieprawidłowy plik JSON.')}e.target.value='';};
