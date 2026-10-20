@@ -26,6 +26,15 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 <label>Przezroczystość: <span id="opval">25%</span></label><input id="opacity" type="range" min="5" max="85" value="25">
 <label>Grubość obramowania: <span id="swval">3</span></label><input id="sw" type="range" min="1" max="10" value="3">
 <small>Linia: kliknij punkt startowy i końcowy. Prostokąt: przeciągnij myszą. Wielokąt: klikaj kolejne punkty i zakończ dwuklikiem. Esc anuluje rysowanie.</small></div>
+<div class="section" id="syncSection"><strong>Współpraca na żywo</strong>
+<p>Połącz z projektem Supabase, aby cała ekipa widziała wspólne zmiany. Każdy uczestnik musi użyć tego samego pokoju.</p>
+<label>Supabase Project URL</label><input id="sbUrl" type="text" placeholder="https://xxxx.supabase.co">
+<label>Supabase anon / publishable key</label><input id="sbKey" type="text" placeholder="sb_publishable_… lub anon key">
+<label>Pokój ekipy</label><input id="roomId" type="text" value="kuttenberg-main" maxlength="80">
+<div class="grid"><button id="connectSync">Połącz live</button><button id="disconnectSync">Rozłącz</button></div>
+<small>Konfiguracja zostaje w tej przeglądarce. Nie wklejaj klucza service_role.</small>
+<div id="syncStatus" class="mode-notice">Synchronizacja nieaktywna.</div>
+</div>
 <div class="section" id="projectSection"><strong>Projekt</strong><div class="grid">
 <button id="undo" class="edit-only">Cofnij</button><button id="clear" class="edit-only">Usuń wszystko</button>
 <button id="export" class="edit-only">Eksport JSON</button><button id="import" class="edit-only">Import JSON</button></div>
@@ -36,6 +45,7 @@ button,input{font:inherit}button{border:1px solid #43515f;background:#29343f;col
 <div class="section"><small>Mapa i grafiki należą do Warhorse Studios; kafelki pochodzą z projektu fanowskiego. Wymagane jest połączenie z internetem. Źródło: <a href="https://github.com/QuangDao215/kcd2_interactive_map" target="_blank" rel="noopener" style="color:#e5c579">GitHub projektu</a>.</small></div>
 </aside><div id="map"></div></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (() => {
 const W=12288,H=10240,MAX=6,BASE='https://quangdao215.github.io/kcd2_interactive_map/tiles/kuttenberg/{z}/{x}/{y}.webp';
@@ -46,7 +56,7 @@ const layer=L.tileLayer(BASE,{tileSize:256,minZoom:0,maxZoom:MAX+2,maxNativeZoom
 map.fitBounds(bounds);map.setMaxBounds([[-200,-200],[H,W+200]]);
 const pane=L.svg({padding:1});pane.addTo(map);
 const params=new URLSearchParams(location.search);let mode=params.get('mode')==='view'?'view':'edit';document.body.classList.toggle('viewer-mode',mode==='view');
-let tool='pan',shapes=[],drawing=null,start=null,drawLayer=L.layerGroup().addTo(map),markerLayer=L.layerGroup().addTo(map);
+let tool='pan',shapes=[],drawing=null,start=null,drawLayer=L.layerGroup().addTo(map),markerLayer=L.layerGroup().addTo(map);\nlet supabaseClient=null,syncChannel=null,syncRoom='',applyingRemote=false,syncTimer=null;\nconst SYNC_TABLE='kcd2_maps';
 const $=id=>document.getElementById(id), status=s=>$('status').textContent=s;
 $('modeNotice').textContent=mode==='view'?'TRYB PODGLĄDU · Możesz przeglądać oznaczenia, wyszukiwać je i zmieniać widok. Rysowanie oraz edycja są wyłączone.':'TRYB DOWÓDCY · Możesz tworzyć i edytować oznaczenia oraz generować osobne linki dla odbiorców.';
 $('opacity').oninput=()=> $('opval').textContent=$('opacity').value+'%';
@@ -62,7 +72,7 @@ function makeShape(s,preview=false){
  if(l&&s.label){l.bindTooltip(s.label,{permanent:true,direction:'center',className:'map-label',opacity:.95});}
  return l;
 }
-function render(){drawLayer.clearLayers();markerLayer.clearLayers();shapes.forEach((s,i)=>{if(s.type==='marker'){const icon=L.divIcon({className:'kcd-marker',html:`<div style="font-size:22px;filter:drop-shadow(1px 1px 2px #000)">${s.kind||'📍'}</div>`,iconSize:[28,28],iconAnchor:[14,14]});const m=L.marker([s.y,s.x],{icon});if(s.label||s.note)m.bindPopup(`<b>${esc(s.label||'Punkt')}</b>${s.note?'<br>'+esc(s.note).replace(/\n/g,'<br>'):''}<br><small>${esc(s.category||'Ogólne')}</small>`);m.addTo(markerLayer);m.on('click',()=>{if(tool==='pan')status('Punkt: '+(s.label||'bez nazwy'));});}else if($('showShapes').checked)makeShape(s).addTo(drawLayer);});if(drawing&&$('showShapes').checked)makeShape(drawing,true).addTo(drawLayer);markerLayer.eachLayer(l=>{});$('showMarkers').checked?map.addLayer(markerLayer):map.removeLayer(markerLayer);updateItems();try{localStorage.setItem('kcd2-kuttenberg-project',JSON.stringify(shapes));}catch(e){}}
+function render(){drawLayer.clearLayers();markerLayer.clearLayers();shapes.forEach((s,i)=>{if(s.type==='marker'){const icon=L.divIcon({className:'kcd-marker',html:`<div style="font-size:22px;filter:drop-shadow(1px 1px 2px #000)">${s.kind||'📍'}</div>`,iconSize:[28,28],iconAnchor:[14,14]});const m=L.marker([s.y,s.x],{icon});if(s.label||s.note)m.bindPopup(`<b>${esc(s.label||'Punkt')}</b>${s.note?'<br>'+esc(s.note).replace(/\n/g,'<br>'):''}<br><small>${esc(s.category||'Ogólne')}</small>`);m.addTo(markerLayer);m.on('click',()=>{if(tool==='pan')status('Punkt: '+(s.label||'bez nazwy'));});}else if($('showShapes').checked)makeShape(s).addTo(drawLayer);});if(drawing&&$('showShapes').checked)makeShape(drawing,true).addTo(drawLayer);markerLayer.eachLayer(l=>{});$('showMarkers').checked?map.addLayer(markerLayer):map.removeLayer(markerLayer);updateItems();try{localStorage.setItem('kcd2-kuttenberg-project',JSON.stringify(shapes));}catch(e){} if(supabaseClient&&!applyingRemote)scheduleSync();}
 function esc(v){return String(v||'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
 function updateItems(){const q=$('search').value.toLowerCase();$('items').innerHTML=shapes.map((s,i)=>({s,i})).filter(o=>(o.s.label||'').toLowerCase().includes(q)).map(({s,i})=>`<button class="wide" data-go="${i}">${s.type==='marker'?(s.kind||'📍'):'▰'} ${esc(s.label||'Bez nazwy')} · ${s.type}</button>`).join('');$('items').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const s=shapes[+b.dataset.go];map.setView(s.type==='marker'?[s.y,s.x]:s.type==='polygon'?[s.points[0].y,s.points[0].x]:[s.y1,s.x1],Math.max(map.getZoom(),3));status('Wybrano: '+(s.label||'bez nazwy'));});}
 function coords(e){return {x:e.latlng.lng,y:e.latlng.lat};}
@@ -86,7 +96,35 @@ function encodedProject(){const data=JSON.stringify({format:'KCD2 Kuttenberg Ove
 async function shareFor(role){const url=location.href.split('?')[0].split('#')[0]+'?mode='+role+'#project='+encodedProject();try{await navigator.clipboard.writeText(url);status(role==='view'?'Skopiowano link dla odbiorców: tylko podgląd.':'Skopiowano link dowódcy: tryb edycji.');}catch(e){prompt(role==='view'?'Skopiuj link tylko do podglądu:':'Skopiuj link do edycji:',url);}}
 $('shareViewer').onclick=()=>shareFor('view');$('shareCommander').onclick=()=>shareFor('edit');
 try{const h=location.hash.match(/^#project=(.+)$/);if(h){const enc=h[1].replace(/-/g,'+').replace(/_/g,'/');shapes=JSON.parse(decodeURIComponent(escape(atob(enc)))).shapes||[];status(mode==='view'?'Wczytano projekt · tryb tylko do podglądu.':'Wczytano projekt dowódcy.');}else if(mode==='edit'){const saved=localStorage.getItem('kcd2-kuttenberg-project');if(saved)shapes=JSON.parse(saved);}else{status('Brak projektu w linku. Otwórz link przygotowany przez dowódcę.');}}catch(e){status('Nie udało się odczytać projektu z linku.');}render();
-function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
+
+function syncStatus(message){$('syncStatus').textContent=message;}
+function scheduleSync(){if(syncTimer)clearTimeout(syncTimer);syncTimer=setTimeout(async()=>{if(!supabaseClient||!syncRoom||applyingRemote)return;const payload={room_id:syncRoom,shapes,updated_at:new Date().toISOString()};const {error}=await supabaseClient.from(SYNC_TABLE).upsert(payload,{onConflict:'room_id'});if(error)syncStatus('Błąd zapisu: '+error.message);},450);}
+$('connectSync').onclick=async()=>{
+ if(mode==='view'){syncStatus('Ten link ma tryb tylko do podglądu. Otwórz tryb dowódcy, aby edytować.');return;}
+ const url=$('sbUrl').value.trim(),key=$('sbKey').value.trim(),room=$('roomId').value.trim();
+ if(!url||!key||!room){syncStatus('Wpisz Project URL, anon/publishable key i nazwę pokoju.');return;}
+ if(!window.supabase){syncStatus('Nie udało się załadować biblioteki Supabase.');return;}
+ try{
+  if(syncChannel)await supabaseClient.removeChannel(syncChannel);
+  supabaseClient=window.supabase.createClient(url,key);
+  syncRoom=room;
+  const {data,error}=await supabaseClient.from(SYNC_TABLE).select('shapes').eq('room_id',syncRoom).maybeSingle();
+  if(error)throw error;
+  if(data&&Array.isArray(data.shapes)){shapes=data.shapes;applyingRemote=true;render();applyingRemote=false;syncStatus('Wczytano wspólny projekt. Nasłuchuję zmian…');}
+  else {const {error:saveError}=await supabaseClient.from(SYNC_TABLE).upsert({room_id:syncRoom,shapes,updated_at:new Date().toISOString()},{onConflict:'room_id'});if(saveError)throw saveError;}
+  syncChannel=supabaseClient.channel('kcd2-room-'+syncRoom).on('postgres_changes',{event:'UPDATE',schema:'public',table:SYNC_TABLE,filter:'room_id=eq.'+syncRoom},payload=>{
+   if(!payload.new||!Array.isArray(payload.new.shapes))return;
+   applyingRemote=true;shapes=payload.new.shapes;render();applyingRemote=false;syncStatus('Połączono. Oznaczenia aktualizują się na żywo.');
+  }).on('postgres_changes',{event:'INSERT',schema:'public',table:SYNC_TABLE,filter:'room_id=eq.'+syncRoom},payload=>{
+   if(!payload.new||!Array.isArray(payload.new.shapes))return;
+   applyingRemote=true;shapes=payload.new.shapes;render();applyingRemote=false;syncStatus('Połączono. Oznaczenia aktualizują się na żywo.');
+  }).subscribe(state=>{if(state==='SUBSCRIBED')syncStatus('Połączono. Oznaczenia aktualizują się na żywo.');else if(state==='CHANNEL_ERROR')syncStatus('Błąd kanału live. Sprawdź Realtime w Supabase.');});
+  localStorage.setItem('kcd2-sync-url',url);localStorage.setItem('kcd2-sync-key',key);localStorage.setItem('kcd2-sync-room',room);
+ }catch(err){syncStatus('Nie udało się połączyć: '+(err.message||err));}
+};
+$('disconnectSync').onclick=async()=>{if(syncChannel&&supabaseClient)await supabaseClient.removeChannel(syncChannel);syncChannel=null;supabaseClient=null;syncRoom='';if(syncTimer)clearTimeout(syncTimer);syncStatus('Rozłączono synchronizację live.');};
+try{$('sbUrl').value=localStorage.getItem('kcd2-sync-url')||'';$('sbKey').value=localStorage.getItem('kcd2-sync-key')||'';$('roomId').value=localStorage.getItem('kcd2-sync-room')||'kuttenberg-main';}catch(e){}
+\nfunction download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
 $('export').onclick=()=>{if(mode==='view')return;download(new Blob([JSON.stringify({format:'KCD2 Kuttenberg Tactical Overlay',version:2,mapWidth:W,mapHeight:H,shapes},null,2)],{type:'application/json'}),'kuttenberg-oznaczenia.json');};
 $('import').onclick=()=>{if(mode==='view')return;$('jsonfile').click();};
 $('jsonfile').onchange=async e=>{if(mode==='view')return;try{const d=JSON.parse(await e.target.files[0].text());if(!Array.isArray(d.shapes))throw Error();shapes=d.shapes;render();status('Wczytano oznaczenia.');}catch{status('Nieprawidłowy plik JSON.')}e.target.value='';};
